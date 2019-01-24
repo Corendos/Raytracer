@@ -4,65 +4,15 @@
 #include <fstream>
 #include <cmath>
 
-struct Vec3f {
-    Vec3f() : Vec3f(0.0f, 0.0f, 0.0f) {}
-    Vec3f(float x, float y, float z) {
-        this->x = x;
-        this->y = y;
-        this->z = z;
-    }
-
-    float x;
-    float y;
-    float z;
-
-    Vec3f& normalize() {
-        float norm = sqrtf(x * x + y * y + z * z);
-        x /= norm;
-        y /= norm;
-        z /= norm;
-
-        return *this;
-    }
-
-    float operator[](int index) {
-        switch(index) {
-            case 0:
-                return x;
-            case 1:
-                return y;
-            case 2:
-                return z;
-            default:
-                throw std::runtime_error("Invalid Index");
-        }
-    }
-
-    Vec3f operator-(const Vec3f& b) const {
-        return Vec3f(this->x - b.x, this->y - b.y, this->z - b.z);
-    }
-
-    Vec3f operator+(const Vec3f& b) const {
-        return Vec3f(this->x + b.x, this->y + b.y, this->z + b.z);
-    }
-
-    float operator*(const Vec3f& b) const {
-        return this->x * b.x + this->y * b.y + this->z * b.z;
-    }
-
-    Vec3f operator*(const float& f) const {
-        return Vec3f(x * f, y * f, z * f);
-    }
-
-    Vec3f operator/(const float& f) const {
-        return Vec3f(x / f, y / f, z / f);
-    }
-};
+#include "geometry.hpp"
 
 struct Material {
-    Material(const Vec3f& color) : diffuseColor(color) {}
-    Material() : diffuseColor() {}
+    Material(const Vec2f& albedo, const Vec3f& color, const float& specular) :
+        albedo(albedo), diffuseColor(color), specularExponent(specular) {}
+    Material() : albedo(1, 0), diffuseColor(), specularExponent() {}
     Vec3f diffuseColor;
+    Vec2f albedo;
+    float specularExponent;
 };
 
 struct Light {
@@ -92,6 +42,10 @@ struct Sphere {
     }
 };
 
+Vec3f reflect(const Vec3f& incident, const Vec3f& N) {
+    return incident - N * 2.0f * (incident * N);
+}
+
 bool sceneIntersect(const Vec3f& origin, const Vec3f& direction, const std::vector<Sphere>& spheres, Vec3f& hit, Vec3f& N, Material& material) {
     float sphereDist = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
@@ -115,13 +69,14 @@ Vec3f castRay(const Vec3f& origin, const Vec3f& direction, const std::vector<Sph
         return Vec3f(0.2, 0.7, 0.8);
     }
 
-    float diffuseLightIntensity = 0;
+    float diffuseLightIntensity = 0, specularLightIntensity = 0;
     for (const auto& light : lights) {
         Vec3f lightDirection = (light.position - point).normalize();
         diffuseLightIntensity += light.intensity * std::max(0.f, lightDirection * N);
+        specularLightIntensity += powf(std::max(0.0f, -reflect(-lightDirection, N) * direction), material.specularExponent) * light.intensity;
     }
 
-    return material.diffuseColor * diffuseLightIntensity;
+    return material.diffuseColor * diffuseLightIntensity * material.albedo[0] + Vec3f(1.0, 1.0, 1.0) * specularLightIntensity * material.albedo[1];
 }
 
 void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
@@ -145,6 +100,9 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
 
     for (size_t i{0};i < width * height;++i) {
         for (size_t j{0};j < 3;++j) {
+            Vec3f& c = framebuffer[i];
+            float max = std::max(c[0], std::max(c[1], c[2]));
+            if (max > 1) c = c * (1. / max);
             ofs << (char)(255 * std::max(0.0f, std::min(1.f, framebuffer[i][j])));
         }   
     }
@@ -152,15 +110,17 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
 }
 
 int main(int, char**) {
-    Material mat1(Vec3f(1.0f, 0.0f, 0.0f));
-    Material mat2(Vec3f(0.0f, 0.0f, 1.0f));
+    Material mat1(Vec2f(0.6, 0.3), Vec3f(0.4f, 0.4f, 0.3f), 100);
+    Material mat2(Vec2f(0.9, 0.1), Vec3f(0.3f, 0.1f, 0.1f), 10);
 
     std::vector<Sphere> spheres;
     spheres.push_back(Sphere(Vec3f(-3, 0, -16), 2, mat1));
-    spheres.push_back(Sphere(Vec3f(-2, 0, -16), 2, mat2));
+    spheres.push_back(Sphere(Vec3f(3, 0, -16), 2, mat2));
 
     std::vector<Light> lights;
-    lights.push_back(Light(Vec3f(-20, 20, 20), 1.5));
+    lights.push_back(Light(Vec3f(-20, 20,  20), 1.5));
+    lights.push_back(Light(Vec3f( 30, 50, -25), 1.8));
+    lights.push_back(Light(Vec3f( 30, 20,  30), 1.7));
     render(spheres, lights);
     return 0;
 }
