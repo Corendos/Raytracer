@@ -25,6 +25,10 @@ struct Vec3f {
         return *this;
     }
 
+    float norm() {
+        return sqrtf(x * x + y * y + z * z);
+    }
+
     float operator[](int index) {
         switch(index) {
             case 0:
