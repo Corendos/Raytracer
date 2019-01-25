@@ -3,6 +3,7 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <omp.h>
 
 #include "geometry.hpp"
 
@@ -65,7 +66,7 @@ Vec3f castRay(const Vec3f& origin, const Vec3f& direction, const std::vector<Sph
     Vec3f point, N;
     Material material;
 
-    if (depth > 4 || !sceneIntersect(origin, direction, spheres, point, N, material)) {
+    if (depth > 32 || !sceneIntersect(origin, direction, spheres, point, N, material)) {
         return Vec3f(0.2, 0.7, 0.8);
     }
 
@@ -93,14 +94,15 @@ Vec3f castRay(const Vec3f& origin, const Vec3f& direction, const std::vector<Sph
 }
 
 void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
-    const int width{1920*2};
-    const int height{1080*2};
+    const int width{1920*10};
+    const int height{1080*10};
     const double fov{70.0};
     std::vector<Vec3f> framebuffer(width * height);
 
-    #pragma omp parallel for
-    for (size_t j{0};j < height;++j) {
-        for (size_t i{0};i < width;++i) {
+    size_t i, j;
+    #pragma omp parallel for private(i), private(j)
+    for (j = 0;j < height;++j) {
+        for (i = 0;i < width;++i) {
             float x = (2 * (i + 0.5) / (float)width - 1) * tan(fov/2.) * width / (float)height;
             float y = -(2 * (j + 0.5) / (float)height - 1) * tan(fov/2.);
             Vec3f dir = Vec3f(x, y, -1).normalize();
@@ -126,7 +128,7 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
 int main(int, char**) {
     Material ivory(Vec3f(0.6, 0.3, 0.1), Vec3f(0.4f, 0.4f, 0.3f), 50);
     Material red_rubber(Vec3f(0.9, 0.1, 0.0), Vec3f(0.3f, 0.1f, 0.1f), 10);
-    Material mirror(Vec3f(0.0, 10.0, 0.95), Vec3f(1.0f, 1.0f, 1.0f), 1425);
+    Material mirror(Vec3f(0.2, 10.0, 0.95), Vec3f(0.9f, 1.0f, 0.9f), 1425);
 
     std::vector<Sphere> spheres;
     spheres.push_back(Sphere(Vec3f(-3, 0, -16), 2, ivory));
