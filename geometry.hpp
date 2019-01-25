@@ -4,6 +4,74 @@
 #include <cmath>
 #include <stdexcept>
 
+struct Vec4f {
+    Vec4f() : Vec4f(0.0f, 0.0f, 0.0f, 0.0f) {}
+    Vec4f(float x, float y, float z, float w) {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+        this->w = w;
+    }
+
+    float x;
+    float y;
+    float z;
+    float w;
+
+    Vec4f& normalize() {
+        float norm = sqrtf(x * x + y * y + z * z + w * w);
+        x /= norm;
+        y /= norm;
+        z /= norm;
+        w /= norm;
+
+        return *this;
+    }
+
+    float norm() {
+        return sqrtf(x * x + y * y + z * z + w * w);
+    }
+
+    float operator[](int index) {
+        switch(index) {
+            case 0:
+                return x;
+            case 1:
+                return y;
+            case 2:
+                return z;
+            case 3:
+                return w;
+            default:
+                throw std::runtime_error("Invalid Index");
+        }
+    }
+
+    Vec4f operator-(const Vec4f& b) const {
+        return Vec4f(this->x - b.x, this->y - b.y, this->z - b.z, this->w - b.w);
+    }
+
+    Vec4f operator+(const Vec4f& b) const {
+        return Vec4f(this->x + b.x, this->y + b.y, this->z + b.z, this->w - b.w);
+    }
+
+    float operator*(const Vec4f& b) const {
+        return this->x * b.x + this->y * b.y + this->z * b.z + this->w * b.w;
+    }
+
+    Vec4f operator*(const float& f) const {
+        return Vec4f(x * f, y * f, z * f, w * f);
+    }
+
+    Vec4f operator/(const float& f) const {
+        return Vec4f(x / f, y / f, z / f, w / f);
+    }
+
+    Vec4f operator-() const {
+        return Vec4f(-x, -y, -z, -w);
+    }
+};
+
 struct Vec3f {
     Vec3f() : Vec3f(0.0f, 0.0f, 0.0f) {}
     Vec3f(float x, float y, float z) {
