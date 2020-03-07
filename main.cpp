@@ -65,18 +65,32 @@ Vec3f refract(const Vec3f& incident, const Vec3f& N, const float& refractive_ind
 }
 
 bool scene_intersect(const Vec3f& origin, const Vec3f& direction, const std::vector<Sphere>& spheres, Vec3f& hit, Vec3f& N, Material& material) {
-    float sphereDist = std::numeric_limits<float>::max();
+    float sphere_dist = std::numeric_limits<float>::max();
     for (const auto& sphere : spheres) {
 	float dist;
-	if (sphere.ray_intersect(origin, direction, dist) && dist < sphereDist) {
-	    sphereDist = dist;
+	if (sphere.ray_intersect(origin, direction, dist) && dist < sphere_dist) {
+	    sphere_dist = dist;
 	    hit = origin + direction * dist;
 	    N = (hit - sphere.center).normalize();
 	    material = sphere.material;
 	}
     }
 
-    return sphereDist < 1000;
+    float checkerboard_distance = std::numeric_limits<float>::max();
+    if (fabs(direction.y) > 1e-3) {
+      float d = -(origin.y + 4) / direction.y;
+
+      Vec3f pt = origin + direction * d;
+
+      if (d > 0 && fabs(pt.x) < 20 && pt.z < -10 && pt.z > -50 && d < sphere_dist) {
+	checkerboard_distance = d;
+	hit = pt;
+	N = Vec3f(0, 1, 0);
+	material.diffuse_color = (((int)(0.5 * hit.x + 1000) + (int)(0.5 * hit.z)) & 1 ? Vec3f(1, 1, 1) : Vec3f(1, .3, .7)) * 0.3;
+      }
+    }
+
+    return std::min(sphere_dist, checkerboard_distance) < 1000;
 }
 
 Vec3f cast_ray(const Vec3f& origin, const Vec3f& direction, const std::vector<Sphere>& spheres, const std::vector<Light>& lights, size_t depth = 0) {
