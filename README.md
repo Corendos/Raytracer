@@ -7,7 +7,7 @@ It uses OpenMP to speed up the generation
 ## Screenshot
 
 ![basics](screenshots/basics.png)
-![checkerboard](screenshots/checkerboard.png)
+![checkerboard](screenshots/basics.png)
 
 ## Todo
 - [ ] Add the base plane in the scene
