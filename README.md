@@ -4,9 +4,10 @@ This is a very basic Raytracer written in C++ following this article : [tinyrayt
 
 It uses OpenMP to speed up the generation
 
-## Screenshots
+## Screenshot
 
 ![basics](screenshots/basics.png)
+![checkerboard](screenshots/basics.png)
 
 ## Todo
 - [ ] Add the base plane in the scene
