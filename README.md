@@ -8,7 +8,8 @@ It uses OpenMP to speed up the generation
 
 ![basics](screenshots/basics.png)
 ![checkerboard](screenshots/checkerboard.png)
+![envmap](screenshots/envmap.png)
 
 ## Todo
-- [ ] Add the base plane in the scene
-- [ ] Use a spherical picture as a background
+- [x] Add the base plane in the scene
+- [x] Use a spherical picture as a background

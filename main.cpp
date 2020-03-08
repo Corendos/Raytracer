@@ -5,6 +5,9 @@
 #include <cmath>
 #include <omp.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include "geometry.hpp"
 
 struct Material {
@@ -43,6 +46,84 @@ struct Sphere {
 	return true;
     }
 };
+
+struct Envmap {
+  int width;
+  int height;
+  int channels;
+
+  unsigned char* pixels;
+};
+
+Envmap make_envmap(int width, int height, int channels, unsigned char* pixels) {
+    Envmap envmap;
+
+    envmap.width = width;
+    envmap.height = height;
+    envmap.channels = channels;
+    envmap.pixels = pixels;
+
+    return envmap;
+}
+
+void free_envmap(Envmap& envmap) {
+    stbi_image_free(envmap.pixels);
+}
+
+float clampf(float value, float min, float max) {
+    if (value > max) return max;
+    if (value < min) return min;
+    return value;
+}
+
+int clamp(int value, int min, int max) {
+    if (value > max) return max;
+    if (value < min) return min;
+    return value;
+}
+
+Vec3f sample_envmap(Envmap& envmap, Vec3f direction) {
+    float yaw = 0.0f;
+
+    Vec2f xz_direction(direction.x, direction.z);
+    xz_direction.normalize();
+
+    Vec2f forward(0.0f, -1.0f);
+
+    float dot_xz = xz_direction * forward;
+    float det_xz = xz_direction.x * forward.y - xz_direction.y * forward.x;
+
+    float angle = atan2(det_xz, dot_xz);
+
+    Vec3f up(0.0f, 1.0f, 0.0f);
+    Vec3f up_normal = cross(direction, up);
+
+    float dot_up = direction * up;
+    float det_up = direction.x * up.y * up_normal.z
+	+ up.x * up_normal.y * direction.z
+	- direction.z * up.y * up_normal.x
+	- up.z * up_normal.y * direction.x
+	- up_normal.z * direction.y * up.x;
+
+    float vertical_angle = atan2(det_up, dot_up);
+
+    float x = ((angle / M_PI) + 1.0f) / 2.0f * (float)envmap.width;
+    float y = (vertical_angle / M_PI) * (float)envmap.height;
+    if (isnan(angle)) {
+	x = 0;
+    }
+
+    int x_int = clamp((int)x, 0, envmap.width - 1);
+    int y_int = clamp((int)y, 0, envmap.height - 1);
+
+    int pixel_index = (y_int * envmap.width + x_int) * 3;
+
+    float r = (float)*(envmap.pixels + pixel_index) / 255.0f;
+    float g = (float)*(envmap.pixels + pixel_index + 1) / 255.0f;
+    float b = (float)*(envmap.pixels + pixel_index + 2) / 255.0f;
+
+    return Vec3f(r, g, b);
+}
 
 Vec3f reflect(const Vec3f& incident, const Vec3f& N) {
     return incident - N * 2.0f * (incident * N);
@@ -93,21 +174,21 @@ bool scene_intersect(const Vec3f& origin, const Vec3f& direction, const std::vec
     return std::min(sphere_dist, checkerboard_distance) < 1000;
 }
 
-Vec3f cast_ray(const Vec3f& origin, const Vec3f& direction, const std::vector<Sphere>& spheres, const std::vector<Light>& lights, size_t depth = 0) {
+Vec3f cast_ray(const Vec3f& origin, const Vec3f& direction, const std::vector<Sphere>& spheres, const std::vector<Light>& lights, Envmap& envmap, size_t depth = 0) {
     Vec3f point, N;
     Material material;
 
     if (depth > 6 || !scene_intersect(origin, direction, spheres, point, N, material)) {
-	return Vec3f(0.2, 0.7, 0.8);
+	return sample_envmap(envmap, direction);
     }
 
     Vec3f reflect_direction = reflect(direction, N).normalize();
     Vec3f reflect_origin = reflect_direction * N < 0 ? point - N * 1e-3 : point + N * 1e-3;
-    Vec3f reflect_color = cast_ray(reflect_origin, reflect_direction, spheres, lights, depth + 1);
+    Vec3f reflect_color = cast_ray(reflect_origin, reflect_direction, spheres, lights, envmap, depth + 1);
 
     Vec3f refract_direction = refract(direction, N, material.refraction_index).normalize();
     Vec3f refract_origin = refract_direction * N < 0 ? point - N * 1e-3 : point + N * 1e-3;
-    Vec3f refract_color = cast_ray(refract_origin, refract_direction, spheres, lights, depth + 1);
+    Vec3f refract_color = cast_ray(refract_origin, refract_direction, spheres, lights, envmap, depth + 1);
 
     float diffuse_light_intensity = 0, specular_light_intensity = 0;
     for (const auto& light : lights) {
@@ -131,7 +212,7 @@ Vec3f cast_ray(const Vec3f& origin, const Vec3f& direction, const std::vector<Sp
 						  refract_color * material.albedo[3];
 }
 
-void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights) {
+void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights, Envmap& envmap) {
     const int width{1920 * 1};
     const int height{1080 * 1};
     const double fov{70.0};
@@ -144,7 +225,7 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
 	    float x = (2 * (i + 0.5) / (float)width - 1) * tan(fov/2.) * width / (float)height;
 	    float y = -(2 * (j + 0.5) / (float)height - 1) * tan(fov/2.);
 	    Vec3f dir = Vec3f(x, y, -1).normalize();
-	    framebuffer[j * width + i] = cast_ray(Vec3f(0, 0, 0), dir, spheres, lights);
+	    framebuffer[j * width + i] = cast_ray(Vec3f(0, 0, 0), dir, spheres, lights, envmap);
 	}
     }
 
@@ -179,6 +260,18 @@ int main(int, char**) {
     lights.push_back(Light(Vec3f(-20, 20,  20), 1.5));
     lights.push_back(Light(Vec3f( 30, 50, -25), 1.8));
     lights.push_back(Light(Vec3f( 30, 20,  30), 1.7));
-    render(spheres, lights);
+
+    Envmap envmap = {};
+    envmap.pixels = stbi_load("../resources/envmap.jpg", &envmap.width, &envmap.height, &envmap.channels, 0);
+
+    if (envmap.pixels == 0) {
+      return -1;
+    }
+
+    Vec3f color = sample_envmap(envmap, Vec3f(0.0, 0.0, -1.0));
+    std::cout << "r: " << color.x << "g: " << color.y << "b: " << color.z << std::endl;
+
+    render(spheres, lights, envmap);
+    free_envmap(envmap);
     return 0;
 }
